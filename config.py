@@ -63,10 +63,6 @@ JSEARCH_SEARCH_QUERIES = [
     "Software Asset Management Analyst in United States",
     "ITAM Specialist in United States",
     "Software License Manager in United States",
-    "SAM Consultant in United States",
-    "ServiceNow SAM in United States",
-    "Flexera administrator in United States",
-    "Snow Software SAM in United States",
 ]
 JSEARCH_DATE_POSTED = "3days"  # options: all, today, 3days, week, month
 JSEARCH_REMOTE_ONLY = False    # False = includes Atlanta on-site + US remote
