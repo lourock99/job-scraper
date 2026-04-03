@@ -13,6 +13,25 @@ import json
 # --- Setup Logging ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+# US state names and abbreviations used for country inference from location strings
+_US_STATE_IDENTIFIERS = {
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
+    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado",
+    "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho",
+    "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana",
+    "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota",
+    "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada",
+    "New Hampshire", "New Jersey", "New Mexico", "New York",
+    "North Carolina", "North Dakota", "Ohio", "Oklahoma", "Oregon",
+    "Pennsylvania", "Rhode Island", "South Carolina", "South Dakota",
+    "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington",
+    "West Virginia", "Wisconsin", "Wyoming", "District of Columbia",
+}
+
 # Convert HTML description to Markdown
 def convert_html_to_markdown(html: str) -> str | None:
     """
@@ -328,6 +347,18 @@ def _fetch_linkedin_job_details(job_id: str) -> dict | None:
             job_details["description"] = None 
             logging.warning(f"Description HTML was empty for job ID {job_id}. Skipping conversion.") 
 
+        # --- Extract Country from Location ---
+        raw_location = job_details.get("location") or ""
+        if raw_location:
+            parts = [p.strip() for p in raw_location.split(",")]
+            last_part = parts[-1] if parts else ""
+            if last_part == "United States" or last_part in _US_STATE_IDENTIFIERS:
+                job_details["country"] = "United States"
+            else:
+                job_details["country"] = last_part or None
+        else:
+            job_details["country"] = None
+
         # --- Set Provider ---
         job_details["provider"] = "linkedin"
         
@@ -428,6 +459,7 @@ def process_jsearch_query(search_query: str, limit: int = None) -> list:
         "num_pages": "2",
         "date_posted": config.JSEARCH_DATE_POSTED,
         "remote_jobs_only": "true" if config.JSEARCH_REMOTE_ONLY else "false",
+        "country": "us",
     }
 
     try:
@@ -480,6 +512,12 @@ def process_jsearch_query(search_query: str, limit: int = None) -> list:
                 logging.debug(f"Skipping duplicate company/title: {company} / {job_title}")
                 continue
 
+        # Skip non-US jobs
+        job_country = item.get("job_country", "").strip().lower()
+        if job_country and job_country not in ("us", "usa", "united states"):
+            logging.debug(f"Skipping non-US job: {company} / {job_title} ({job_country})")
+            continue
+
         city = item.get("job_city", "")
         state = item.get("job_state", "")
         location_parts = [p for p in [city, state] if p]
@@ -491,6 +529,7 @@ def process_jsearch_query(search_query: str, limit: int = None) -> list:
             "job_title": job_title or None,
             "level": None,
             "location": location or None,
+            "country": "United States",  # Already filtered to US-only above
             "description": description,
             "provider": "jsearch",
         })
@@ -885,6 +924,7 @@ def process_usajobs_query(search_query: str, limit: int = None) -> list:
             "company": company or None,
             "job_title": job_title or None,
             "location": location or None,
+            "country": "United States",  # USAJobs API always returns US federal jobs
             "description": description,
             "level": level or None,
             "provider": "usajobs",

@@ -88,7 +88,7 @@ PRE_FILTER_FETCH_MULTIPLIER = 4  # fetch 4x jobs, filter down to JOBS_TO_SCORE_P
 
 # --- Processing Limits ---
 SCRAPING_SOURCES = ["linkedin", "jsearch", "usajobs"]
-JOBS_TO_SCORE_PER_RUN = 5
+JOBS_TO_SCORE_PER_RUN = 20
 JOBS_TO_CUSTOMIZE_PER_RUN = 1
 MAX_JOBS_PER_SEARCH = {
     "linkedin": 2,

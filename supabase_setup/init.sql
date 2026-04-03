@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS "public"."jobs" (
     "job_title" "text",
     "level" "text",
     "location" "text",
+    "country" "text",
     "description" "text",
     "status" "text" DEFAULT 'new'::"text",
     "is_active" boolean DEFAULT true,
@@ -416,7 +417,7 @@ BEGIN
         j.provider
     FROM
         jobs j
-    INNER JOIN
+    LEFT JOIN
         customized_resumes cr ON j.customized_resume_id = cr.id
     WHERE
         j.is_active = TRUE
@@ -424,6 +425,7 @@ BEGIN
         AND j.job_state = 'new'
         AND j.resume_score >= p_min_score
         AND j.resume_score <= p_max_score
+        AND j.resume_score_stage != 'pre_filtered'
         AND (p_provider IS NULL OR j.provider = p_provider)
         AND (
             p_is_interested_option IS NULL
@@ -481,7 +483,7 @@ BEGIN
         j.provider
     FROM
         jobs j
-    INNER JOIN
+    LEFT JOIN
         customized_resumes cr ON j.customized_resume_id = cr.id
     WHERE
         j.is_active = TRUE
@@ -489,6 +491,7 @@ BEGIN
         AND j.job_state = 'new'
         AND j.resume_score >= p_min_score
         AND j.resume_score <= p_max_score
+        AND j.resume_score_stage != 'pre_filtered'
         AND (p_provider IS NULL OR j.provider = p_provider)
         AND (
             p_is_interested_option IS NULL
@@ -496,8 +499,8 @@ BEGIN
             OR (p_is_interested_option = 'false' AND j.is_interested IS FALSE)
             OR (p_is_interested_option = 'null_value' AND j.is_interested IS NULL)
         )
-        AND ( -- Added search query condition
-            p_search_query IS NULL 
+        AND (
+            p_search_query IS NULL
             OR j.job_title ILIKE '%' || p_search_query || '%'
             OR j.company ILIKE '%' || p_search_query || '%'
         )
