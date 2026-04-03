@@ -79,7 +79,7 @@ USAJOBS_SEARCH_QUERIES = [
 ]
 USAJOBS_LOCATION = "Atlanta, GA"
 USAJOBS_RADIUS = 50         # miles
-USAJOBS_DATE_POSTED = 1     # days (1 = last 24h)
+USAJOBS_DATE_POSTED = 7     # days (7 = last week)
 
 # --- Pre-filter Configuration ---
 PRE_FILTER_ENABLED = True
