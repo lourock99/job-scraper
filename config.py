@@ -19,6 +19,7 @@ BASE_RESUME_PATH = "resume.json"
 
 # API keys — set only the key(s) needed for your chosen provider.
 LLM_API_KEY = os.environ.get("LLM_API_KEY") or os.environ.get("GEMINI_API_KEY") or os.environ.get("GEMINI_FIRST_API_KEY")
+JSEARCH_API_KEY = os.environ.get("JSEARCH_API_KEY")
 
 # =================================================================
 # 2. USER PREFERENCES (Editable)
@@ -47,13 +48,23 @@ CAREERS_FUTURE_SEARCH_QUERIES = ["IT Support", "Full Stack Web Developer", "Appl
 CAREERS_FUTURE_SEARCH_CATEGORIES = ["Information Technology"]
 CAREERS_FUTURE_SEARCH_EMPLOYMENT_TYPES = ["Full Time"]
 
+JSEARCH_SEARCH_QUERIES = [
+    "Software License Compliance in United States",
+    "License Compliance Manager in United States",
+    "SAM Analyst in United States",
+    "Software Asset Management Analyst in United States",
+]
+JSEARCH_DATE_POSTED = "today"  # options: all, today, 3days, week, month
+JSEARCH_REMOTE_ONLY = False    # False = includes Atlanta on-site + US remote
+
 # --- Processing Limits ---
-SCRAPING_SOURCES = ["linkedin"]
+SCRAPING_SOURCES = ["linkedin", "jsearch"]
 JOBS_TO_SCORE_PER_RUN = 5
 JOBS_TO_CUSTOMIZE_PER_RUN = 1
 MAX_JOBS_PER_SEARCH = {
     "linkedin": 2,
     "careers_future": 10,
+    "jsearch": 10,
 }
 
 # =================================================================

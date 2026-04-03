@@ -86,7 +86,8 @@ def _fetch_linkedin_job_ids(search_query: str, location: str) -> list:
 
     logging.info(f"--- Starting Phase 1: Scraping Job IDs (Max Start: {max_start}) ---")
     while start <= max_start:
-        target_url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={search_query.replace(' ', '%20')}&location={location}&geoId={config.LINKEDIN_GEO_ID}&f_TPR={config.LINKEDIN_JOB_POSTING_DATE}&f_JT={config.LINKEDIN_JOB_TYPE}&f_WT={config.LINKEDIN_F_WT}&start={start}"
+        f_wt_param = f"&f_WT={config.LINKEDIN_F_WT}" if config.LINKEDIN_F_WT is not None else ""
+        target_url = f"https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search?keywords={search_query.replace(' ', '%20')}&location={location}&geoId={config.LINKEDIN_GEO_ID}&f_TPR={config.LINKEDIN_JOB_POSTING_DATE}&f_JT={config.LINKEDIN_JOB_TYPE}{f_wt_param}&start={start}"
 
         if start > 0:
             sleep_time = random.uniform(5.0, 15.0)
@@ -406,6 +407,100 @@ def process_linkedin_query(search_query: str, location: str, limit: int = None) 
 
     logging.info(f"--- Finished Phase 2: Successfully fetched details for {processed_count} new job(s) ---")
     return detailed_new_jobs
+
+def process_jsearch_query(search_query: str, limit: int = None) -> list:
+    """
+    Fetches jobs from JSearch API (aggregates LinkedIn, Indeed, Glassdoor, ZipRecruiter).
+    Deduplicates against Supabase and returns a list of new job dicts.
+    """
+    if not config.JSEARCH_API_KEY:
+        logging.error("JSEARCH_API_KEY is not set. Skipping JSearch scraping.")
+        return []
+
+    logging.info(f"--- Starting JSearch query: '{search_query}' ---")
+
+    headers = {
+        "X-RapidAPI-Key": config.JSEARCH_API_KEY,
+        "X-RapidAPI-Host": "jsearch.p.rapidapi.com",
+    }
+    params = {
+        "query": search_query,
+        "num_pages": "2",
+        "date_posted": config.JSEARCH_DATE_POSTED,
+        "remote_jobs_only": "true" if config.JSEARCH_REMOTE_ONLY else "false",
+    }
+
+    try:
+        response = requests.get(
+            "https://jsearch.p.rapidapi.com/search",
+            headers=headers,
+            params=params,
+            timeout=config.REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"JSearch HTTP error for query '{search_query}': {e}")
+        return []
+    except requests.exceptions.RequestException as e:
+        logging.error(f"JSearch request error for query '{search_query}': {e}")
+        return []
+    except json.JSONDecodeError:
+        logging.error(f"JSearch returned invalid JSON for query '{search_query}'")
+        return []
+
+    raw_jobs = data.get("data", [])
+    logging.info(f"JSearch returned {len(raw_jobs)} raw jobs for '{search_query}'")
+
+    if not raw_jobs:
+        return []
+
+    # Deduplicate against Supabase
+    job_ids_set, company_title_set = supabase_utils.get_existing_jobs_from_supabase()
+
+    new_jobs = []
+    for item in raw_jobs:
+        job_id = item.get("job_id")
+        company = item.get("employer_name", "").strip()
+        job_title = item.get("job_title", "").strip()
+        description = item.get("job_description", "").strip()
+
+        if not job_id or not description:
+            continue
+
+        # Skip if already in Supabase by ID
+        if str(job_id) in job_ids_set:
+            logging.debug(f"Skipping duplicate job ID: {job_id}")
+            continue
+
+        # Skip if company+title combo already exists
+        if company and job_title:
+            key = (company.lower(), job_title.lower())
+            if key in company_title_set:
+                logging.debug(f"Skipping duplicate company/title: {company} / {job_title}")
+                continue
+
+        city = item.get("job_city", "")
+        state = item.get("job_state", "")
+        location_parts = [p for p in [city, state] if p]
+        location = ", ".join(location_parts) or item.get("job_country", "")
+
+        new_jobs.append({
+            "job_id": str(job_id),
+            "company": company or None,
+            "job_title": job_title or None,
+            "level": None,
+            "location": location or None,
+            "description": description,
+            "provider": "jsearch",
+        })
+
+    if limit is not None and len(new_jobs) > limit:
+        new_jobs = new_jobs[:limit]
+
+    logging.info(f"JSearch: {len(new_jobs)} new jobs after deduplication for '{search_query}'")
+    return new_jobs
+
 
 def _fetch_careers_future_jobs(search_query: str) -> list:
     """
@@ -741,6 +836,22 @@ if __name__ == "__main__":
     else:
         logging.info("\n--- Skipping Careers Future Job Scraping per config ---")
 
-    # --- End of Script ---      
+    # Get jobs from JSearch
+    if "jsearch" in config.SCRAPING_SOURCES:
+        logging.info("\n--- Starting JSearch Job Scraping ---")
+        max_jobs_per_search = config.MAX_JOBS_PER_SEARCH.get("jsearch", 10)
+        for query in config.JSEARCH_SEARCH_QUERIES:
+            logging.info(f"\n{'='*20} Processing JSearch Query: '{query}' {'='*20}")
+            new_jsearch_jobs = process_jsearch_query(query, limit=max_jobs_per_search)
+            if new_jsearch_jobs:
+                logging.info(f"\n--- Saving {len(new_jsearch_jobs)} new job(s) for query '{query}' ---")
+                supabase_utils.save_jobs_to_supabase(new_jsearch_jobs)
+                total_new_jobs_saved += len(new_jsearch_jobs)
+            else:
+                logging.info(f"\nNo new job details were fetched or processed for query '{query}'.")
+    else:
+        logging.info("\n--- Skipping JSearch Job Scraping per config ---")
+
+    # --- End of Script ---
     logging.info(f"\n{'='*20} Job scraping script finished {'='*20}")
     logging.info(f"Total new jobs saved across all queries: {total_new_jobs_saved}")
