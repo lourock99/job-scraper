@@ -6,6 +6,7 @@ import requests
 import io
 import pdfplumber
 import os
+import litellm
 
 import config
 import supabase_utils
@@ -197,6 +198,32 @@ def extract_text_from_pdf_url(pdf_url: str) -> Optional[str]:
         logging.error(f"An unexpected error occurred while extracting text from PDF URL {pdf_url}: {e}")
         return None
 
+def is_job_relevant(job_description: str) -> Optional[bool]:
+    """
+    Uses a fast Anthropic Haiku call to check if a job is relevant to SAM/ITAM/license compliance.
+    Returns True if relevant, False if not, None if the call fails.
+    """
+    prompt = (
+        "Does the following job description relate to Software Asset Management (SAM), "
+        "IT Asset Management (ITAM), software license compliance, license management, "
+        "or closely related roles (e.g. Flexera, ServiceNow SAM, Snow Software, Oracle License Management)?\n\n"
+        f"{job_description[:3000]}\n\n"
+        "Answer only YES or NO."
+    )
+    try:
+        response = litellm.completion(
+            model=config.PRE_FILTER_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=5,
+            temperature=0,
+        )
+        answer = response.choices[0].message.content.strip().upper()
+        return answer.startswith("YES")
+    except Exception as e:
+        logging.error(f"Error during pre-filter relevance check: {e}")
+        return None
+
+
 def rescore_jobs_with_custom_resume():
     """Fetches jobs with custom resumes and re-scores them."""
     logging.info("--- Starting Job Re-scoring with Custom Resumes ---")
@@ -304,8 +331,39 @@ def main():
         default_resume_text = format_resume_to_text(default_resume_data)
         logging.info("Default resume data formatted to text.")
 
-        # 3. Fetch Jobs to Score
-        jobs_to_score_initially = supabase_utils.get_jobs_to_score(config.JOBS_TO_SCORE_PER_RUN)
+        # 3. Fetch Jobs to Score (with optional pre-filter)
+        pre_filter_enabled = getattr(config, 'PRE_FILTER_ENABLED', False)
+        fetch_multiplier = getattr(config, 'PRE_FILTER_FETCH_MULTIPLIER', 1)
+        fetch_limit = config.JOBS_TO_SCORE_PER_RUN * fetch_multiplier if pre_filter_enabled else config.JOBS_TO_SCORE_PER_RUN
+
+        jobs_candidates = supabase_utils.get_jobs_to_score(fetch_limit)
+
+        if pre_filter_enabled and jobs_candidates:
+            logging.info(f"Pre-filter enabled. Checking {len(jobs_candidates)} candidates for SAM/ITAM relevance...")
+            passed, filtered_out = [], []
+
+            for job in jobs_candidates:
+                description = job.get('description', '')
+                if not description:
+                    filtered_out.append(job)
+                    continue
+                relevant = is_job_relevant(description)
+                if not relevant:
+                    logging.info(f"Pre-filtering job {job.get('job_id')} as not relevant.")
+                    filtered_out.append(job)
+                else:
+                    logging.info(f"Job {job.get('job_id')} passed pre-filter.")
+                    passed.append(job)
+
+            # Mark filtered-out jobs so they won't be re-fetched
+            for job in filtered_out:
+                supabase_utils.update_job_score(job.get('job_id'), score=0, resume_score_stage="pre_filtered")
+
+            jobs_to_score_initially = passed[:config.JOBS_TO_SCORE_PER_RUN]
+            logging.info(f"Pre-filter: {len(filtered_out)} filtered out, {len(jobs_to_score_initially)} selected for Claude scoring.")
+        else:
+            jobs_to_score_initially = jobs_candidates
+
         if not jobs_to_score_initially:
             logging.info("No jobs require initial scoring at this time.")
         else:

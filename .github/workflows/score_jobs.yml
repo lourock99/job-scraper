@@ -7,19 +7,16 @@ on:
     - cron: "0 */4 * * *"
   workflow_dispatch: # Allows manual triggering from the Actions tab
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   score:
     runs-on: ubuntu-latest # Use a standard Linux runner
 
     steps:
       - name: Checkout repository code
-        uses: actions/checkout@v4 # Checks out your code
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11" # Specify your desired Python version
 

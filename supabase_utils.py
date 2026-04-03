@@ -264,8 +264,8 @@ def update_job_score(job_id: str, score: int, resume_score_stage: str = "initial
         logging.error(f"Invalid input for updating job score: job_id={job_id}, score={score}")
         return False
 
-    if resume_score_stage not in ["initial", "custom"]:
-        logging.error(f"Invalid resume_score_stage: {resume_score_stage}. Must be 'initial' or 'custom'.")
+    if resume_score_stage not in ["initial", "custom", "pre_filtered"]:
+        logging.error(f"Invalid resume_score_stage: {resume_score_stage}. Must be 'initial', 'custom', or 'pre_filtered'.")
         return False
 
     try:
