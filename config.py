@@ -30,12 +30,18 @@ LLM_API_KEY = os.environ.get("LLM_API_KEY") or os.environ.get("GEMINI_API_KEY") 
 LLM_MODEL = "anthropic/claude-sonnet-4-5"
 
 # --- Search Configuration ---
-LINKEDIN_SEARCH_QUERIES = ["Software Asset Management Manager", "SAM Manager", "IT Asset Management Manager", "ITAM Manager", "Software Asset Manager"]
+LINKEDIN_SEARCH_QUERIES = [
+    "Software License Compliance",
+    "License Compliance Manager",
+    "License Compliance Analyst",
+    "Software Asset Management Analyst",
+    "SAM Analyst",
+]
 LINKEDIN_LOCATION = "Atlanta Metropolitan Area"
 LINKEDIN_GEO_ID = 90000539
 LINKEDIN_JOB_TYPE = "F"
 LINKEDIN_JOB_POSTING_DATE = "r86400"
-LINKEDIN_F_WT = 2  # 1=Onsite, 2=Remote, 3=Hybrid
+LINKEDIN_F_WT = None  # No work type filter — returns all (on-site, remote, hybrid)
 
 CAREERS_FUTURE_SEARCH_QUERIES = ["IT Support", "Full Stack Web Developer", "Application Support", "Cybersecurity Analyst", "fresher developer"]
 CAREERS_FUTURE_SEARCH_CATEGORIES = ["Information Technology"]
