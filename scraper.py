@@ -791,6 +791,109 @@ def process_careers_future_query(search_query: str, limit: int = None) -> list:
     logging.info(f"--- Finished Phase 4: Successfully fetched details for {processed_count} new job(s) ---")
     return detailed_new_jobs
 
+def process_usajobs_query(search_query: str, limit: int = None) -> list:
+    """
+    Fetches jobs from the USAJobs API (federal positions).
+    Deduplicates against Supabase and returns a list of new job dicts.
+    """
+    if not config.USAJOBS_API_KEY or not config.USAJOBS_API_EMAIL:
+        logging.error("USAJOBS_API_KEY or USAJOBS_API_EMAIL is not set. Skipping USAJobs scraping.")
+        return []
+
+    logging.info(f"--- Starting USAJobs query: '{search_query}' ---")
+
+    headers = {
+        "Host": "data.usajobs.gov",
+        "User-Agent": config.USAJOBS_API_EMAIL,
+        "Authorization-Key": config.USAJOBS_API_KEY,
+    }
+    params = {
+        "Keyword": search_query,
+        "LocationName": config.USAJOBS_LOCATION,
+        "Radius": str(config.USAJOBS_RADIUS),
+        "ResultsPerPage": str(limit or config.MAX_JOBS_PER_SEARCH.get("usajobs", 10)),
+        "DatePosted": str(config.USAJOBS_DATE_POSTED),
+    }
+
+    try:
+        response = requests.get(
+            "https://data.usajobs.gov/api/search",
+            headers=headers,
+            params=params,
+            timeout=config.REQUEST_TIMEOUT,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"USAJobs HTTP error for query '{search_query}': {e}")
+        return []
+    except requests.exceptions.RequestException as e:
+        logging.error(f"USAJobs request error for query '{search_query}': {e}")
+        return []
+    except json.JSONDecodeError:
+        logging.error(f"USAJobs returned invalid JSON for query '{search_query}'")
+        return []
+
+    raw_items = data.get("SearchResult", {}).get("SearchResultItems", [])
+    logging.info(f"USAJobs returned {len(raw_items)} raw jobs for '{search_query}'")
+
+    if not raw_items:
+        return []
+
+    job_ids_set, company_title_set = supabase_utils.get_existing_jobs_from_supabase()
+
+    new_jobs = []
+    for item in raw_items:
+        descriptor = item.get("MatchedObjectDescriptor", {})
+        job_id = item.get("MatchedObjectId")
+        company = descriptor.get("DepartmentName", "").strip()
+        job_title = descriptor.get("PositionTitle", "").strip()
+
+        if not job_id:
+            continue
+
+        if str(job_id) in job_ids_set:
+            logging.debug(f"Skipping duplicate USAJobs ID: {job_id}")
+            continue
+
+        if company and job_title:
+            key = (company.lower(), job_title.lower())
+            if key in company_title_set:
+                logging.debug(f"Skipping duplicate company/title: {company} / {job_title}")
+                continue
+
+        # Location
+        locations = descriptor.get("PositionLocation", [])
+        location = locations[0].get("LocationName", "") if locations else ""
+
+        # Description: combine job summary + qualification summary
+        user_area = descriptor.get("UserArea", {}).get("Details", {})
+        job_summary = user_area.get("JobSummary", "")
+        qual_summary = descriptor.get("QualificationSummary", "")
+        description_parts = [p for p in [job_summary, qual_summary] if p]
+        description = "\n\n".join(description_parts).strip()
+
+        if not description:
+            continue
+
+        # Grade/level
+        grades = descriptor.get("JobGrade", [])
+        level = grades[0].get("Code", "") if grades else ""
+
+        new_jobs.append({
+            "job_id": str(job_id),
+            "company": company or None,
+            "job_title": job_title or None,
+            "location": location or None,
+            "description": description,
+            "level": level or None,
+            "provider": "usajobs",
+        })
+
+    logging.info(f"USAJobs: {len(new_jobs)} new job(s) after deduplication for '{search_query}'")
+    return new_jobs
+
+
 # --- Main Execution ---
 if __name__ == "__main__":
 
@@ -851,6 +954,22 @@ if __name__ == "__main__":
                 logging.info(f"\nNo new job details were fetched or processed for query '{query}'.")
     else:
         logging.info("\n--- Skipping JSearch Job Scraping per config ---")
+
+    # Get jobs from USAJobs
+    if "usajobs" in config.SCRAPING_SOURCES:
+        logging.info("\n--- Starting USAJobs Scraping ---")
+        max_jobs_per_search = config.MAX_JOBS_PER_SEARCH.get("usajobs", 10)
+        for query in config.USAJOBS_SEARCH_QUERIES:
+            logging.info(f"\n{'='*20} Processing USAJobs Query: '{query}' {'='*20}")
+            new_usajobs = process_usajobs_query(query, limit=max_jobs_per_search)
+            if new_usajobs:
+                logging.info(f"\n--- Saving {len(new_usajobs)} new job(s) for query '{query}' ---")
+                supabase_utils.save_jobs_to_supabase(new_usajobs)
+                total_new_jobs_saved += len(new_usajobs)
+            else:
+                logging.info(f"\nNo new job details were fetched or processed for query '{query}'.")
+    else:
+        logging.info("\n--- Skipping USAJobs Scraping per config ---")
 
     # --- End of Script ---
     logging.info(f"\n{'='*20} Job scraping script finished {'='*20}")

@@ -37,6 +37,14 @@ LINKEDIN_SEARCH_QUERIES = [
     "License Compliance Analyst",
     "Software Asset Management Analyst",
     "SAM Analyst",
+    "Software License Manager",
+    "ITAM Specialist",
+    "SAM Consultant",
+    "Software Asset Management Consultant",
+    "ServiceNow SAM",
+    "Flexera",
+    "Snow Software",
+    "Oracle License Compliance",
 ]
 LINKEDIN_LOCATION = "Atlanta Metropolitan Area"
 LINKEDIN_GEO_ID = 90000539
@@ -53,18 +61,44 @@ JSEARCH_SEARCH_QUERIES = [
     "License Compliance Manager in United States",
     "SAM Analyst in United States",
     "Software Asset Management Analyst in United States",
+    "ITAM Specialist in United States",
+    "Software License Manager in United States",
+    "SAM Consultant in United States",
+    "ServiceNow SAM in United States",
+    "Flexera administrator in United States",
+    "Snow Software SAM in United States",
 ]
-JSEARCH_DATE_POSTED = "today"  # options: all, today, 3days, week, month
+JSEARCH_DATE_POSTED = "3days"  # options: all, today, 3days, week, month
 JSEARCH_REMOTE_ONLY = False    # False = includes Atlanta on-site + US remote
 
+# --- USAJobs Configuration ---
+USAJOBS_API_KEY = os.environ.get("USAJOBS_API_KEY")
+USAJOBS_API_EMAIL = os.environ.get("USAJOBS_API_EMAIL")  # Required as User-Agent header
+USAJOBS_SEARCH_QUERIES = [
+    "Software Asset Management",
+    "Software License Management",
+    "IT Asset Management",
+    "License Compliance",
+    "SAM Analyst",
+]
+USAJOBS_LOCATION = "Atlanta, GA"
+USAJOBS_RADIUS = 50         # miles
+USAJOBS_DATE_POSTED = 1     # days (1 = last 24h)
+
+# --- Pre-filter Configuration ---
+PRE_FILTER_ENABLED = True
+PRE_FILTER_MODEL = "anthropic/claude-haiku-4-5-20251001"  # Fast/cheap Anthropic model for relevance check
+PRE_FILTER_FETCH_MULTIPLIER = 4  # fetch 4x jobs, filter down to JOBS_TO_SCORE_PER_RUN
+
 # --- Processing Limits ---
-SCRAPING_SOURCES = ["linkedin", "jsearch"]
+SCRAPING_SOURCES = ["linkedin", "jsearch", "usajobs"]
 JOBS_TO_SCORE_PER_RUN = 5
 JOBS_TO_CUSTOMIZE_PER_RUN = 1
 MAX_JOBS_PER_SEARCH = {
     "linkedin": 2,
     "careers_future": 10,
     "jsearch": 10,
+    "usajobs": 10,
 }
 
 # =================================================================
