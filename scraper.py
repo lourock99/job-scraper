@@ -263,7 +263,7 @@ def _fetch_linkedin_job_details(job_id: str) -> dict | None:
         try:
             company_img = soup.find("div",{"class":"top-card-layout__card"}).find("a").find("img")
             if company_img:
-                job_details["company"] = company_img.get('alt').strip()
+                job_details["company"] = (company_img.get('alt') or "").strip()
             if not job_details.get("company"):
                  company_link = soup.find("a", {"class": "topcard__org-name-link"})
                  if company_link:
@@ -690,7 +690,7 @@ def _fetch_careers_future_job_details(job_id: str) -> dict | None:
         job_data = response.json()
         logging.info(f"Successfully fetched and parsed job details for ID: {job_id}")
 
-        raw_description_html = job_data.get('description', '')
+        raw_description_html = job_data.get('description') or ''
         # Convert HTML description directly to Markdown (no LLM needed)
         markdown_description = None 
         if raw_description_html.strip(): 
@@ -885,8 +885,8 @@ def process_usajobs_query(search_query: str, limit: int = None) -> list:
     for item in raw_items:
         descriptor = item.get("MatchedObjectDescriptor", {})
         job_id = item.get("MatchedObjectId")
-        company = descriptor.get("DepartmentName", "").strip()
-        job_title = descriptor.get("PositionTitle", "").strip()
+        company = (descriptor.get("DepartmentName") or "").strip()
+        job_title = (descriptor.get("PositionTitle") or "").strip()
 
         if not job_id:
             continue
@@ -903,12 +903,12 @@ def process_usajobs_query(search_query: str, limit: int = None) -> list:
 
         # Location
         locations = descriptor.get("PositionLocation", [])
-        location = locations[0].get("LocationName", "") if locations else ""
+        location = (locations[0].get("LocationName") or "") if locations else ""
 
         # Description: combine job summary + qualification summary
         user_area = descriptor.get("UserArea", {}).get("Details", {})
-        job_summary = user_area.get("JobSummary", "")
-        qual_summary = descriptor.get("QualificationSummary", "")
+        job_summary = user_area.get("JobSummary") or ""
+        qual_summary = descriptor.get("QualificationSummary") or ""
         description_parts = [p for p in [job_summary, qual_summary] if p]
         description = "\n\n".join(description_parts).strip()
 
@@ -917,7 +917,7 @@ def process_usajobs_query(search_query: str, limit: int = None) -> list:
 
         # Grade/level
         grades = descriptor.get("JobGrade", [])
-        level = grades[0].get("Code", "") if grades else ""
+        level = (grades[0].get("Code") or "") if grades else ""
 
         new_jobs.append({
             "job_id": str(job_id),
