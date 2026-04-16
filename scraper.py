@@ -493,9 +493,9 @@ def process_jsearch_query(search_query: str, limit: int = None) -> list:
     new_jobs = []
     for item in raw_jobs:
         job_id = item.get("job_id")
-        company = item.get("employer_name", "").strip()
-        job_title = item.get("job_title", "").strip()
-        description = item.get("job_description", "").strip()
+        company = (item.get("employer_name") or "").strip()
+        job_title = (item.get("job_title") or "").strip()
+        description = (item.get("job_description") or "").strip()
 
         if not job_id or not description:
             continue
@@ -513,15 +513,15 @@ def process_jsearch_query(search_query: str, limit: int = None) -> list:
                 continue
 
         # Skip non-US jobs
-        job_country = item.get("job_country", "").strip().lower()
+        job_country = (item.get("job_country") or "").strip().lower()
         if job_country and job_country not in ("us", "usa", "united states"):
             logging.debug(f"Skipping non-US job: {company} / {job_title} ({job_country})")
             continue
 
-        city = item.get("job_city", "")
-        state = item.get("job_state", "")
+        city = item.get("job_city") or ""
+        state = item.get("job_state") or ""
         location_parts = [p for p in [city, state] if p]
-        location = ", ".join(location_parts) or item.get("job_country", "")
+        location = ", ".join(location_parts) or (item.get("job_country") or "")
 
         new_jobs.append({
             "job_id": str(job_id),
